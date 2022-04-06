@@ -1,0 +1,2 @@
+"0","# , main=""Figura 2. Distribucion de las variables del dataset normalizadas"""
+"0","abline(h=mean(means_n), col=""red"")"

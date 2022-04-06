@@ -1,0 +1,4 @@
+"0","# datos para un sólo entrenamiento, no se utilizan"
+"0","dim <- dim(bc)"
+"0","num_train <- round((dim[1]*params$ptrain),0)"
+"0","num_test <- dim[1] - num_train"

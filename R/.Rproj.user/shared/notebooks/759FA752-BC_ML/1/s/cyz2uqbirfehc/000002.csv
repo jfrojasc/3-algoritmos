@@ -1,0 +1,4 @@
+"0","normalize <- function(x) {"
+"0","  return ((x - min(x)) / (max(x) - min(x)))"
+"0","}"
+"0","bc_n <- as.data.frame(lapply(bc[1:(round(dim[2],0)-1)], normalize))"

@@ -1,0 +1,7 @@
+base
+knitr
+corrplot
+ggplot2
+lattice
+caret
+pROC

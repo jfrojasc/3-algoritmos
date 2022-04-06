@@ -1,0 +1,4 @@
+"0","# Figura 1. der"
+"0","par(mar=c(11,3,1,1))"
+"0","means_n <- as.numeric((lapply(bc_n, mean)))"
+"0","boxplot(bc_n[1:30], las=2, col=""lightblue"")"

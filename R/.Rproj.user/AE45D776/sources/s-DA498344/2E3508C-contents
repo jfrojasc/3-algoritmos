@@ -1,0 +1,278 @@
+---
+pdf_document:
+  toc: yes
+author: "Jose Felix Rojas Cabeza"
+date: "`r format(Sys.time(), '%Y / %B / %d')`"
+output:
+  word_document: null
+  toc: yes
+  html_document:
+    df_print: paged
+  pdf_document: default
+subtitle: Por definir
+html_document:
+  code_folding: show
+theme: cerulean
+toc: yes
+toc_float: yes
+title: "Cancer de mama"
+params:
+  data1: ./Data/BreastCancer1.csv
+  data2: ./Data/WBC.csv
+  ptrain: !r 2/3
+  seed_train: 805547
+  seed_alg: 713945
+---
+
+```{r setup, include=FALSE}
+require(knitr)
+# include this code chunk as-is to set options
+opts_chunk$set(comment = NA, prompt = TRUE, tidy = FALSE, 
+               fig.width = 7, fig.height = 7,echo = TRUE,
+               fig.align='center', message = FALSE, 
+               warning = FALSE, cache=TRUE)
+Sys.setlocale("LC_TIME", "C")
+# Random numbers for seeds: 713945, 805547
+```
+
+# Data
+
+## Data collection
+```{r}
+bc_full <- read.csv(params$data1, stringsAsFactors = FALSE)
+# dim(bc_full)
+# head(bc_full[1:4])
+```
+
+```{r}
+dim(bc_full)
+head(bc_full)
+```
+
+
+## Data exploration and preparation
+
+```{r}
+# 1234567890123456789012345678901234567890123456789012345678901234567890
+bc <- bc_full[,-1]  
+
+# Figura 1. Izq
+# str(bc)
+``` 
+
+```{r echo=FALSE}
+# datos para un sólo entrenamiento, no se utilizan
+dim <- dim(bc)
+num_train <- round((dim[1]*params$ptrain),0)
+num_test <- dim[1] - num_train
+```
+
+```{r}
+# Benign / Malignant
+bc$diagnosis <- factor(bc$diagnosis, levels= c("B", "M"), labels=c("Benign", "Malignant"))
+table(bc$diagnosis)
+```
+
+```{r}
+table(is.na(bc))
+```
+
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+bc_n <- as.data.frame(lapply(bc[1:(round(dim[2],0)-1)], normalize))
+```
+
+```{r}
+# Figura 1. der
+par(mar=c(11,3,1,1))
+means_n <- as.numeric((lapply(bc_n, mean)))
+boxplot(bc_n[1:30], las=2, col="lightblue")
+# , main="Figura 2. Distribucion de las variables del dataset normalizadas"
+abline(h=mean(means_n), col="red")
+```
+
+# Correlogram
+```{r, fig.height=15, fig.width=15}
+library(corrplot)
+par(mar=c(11,3,1,1))
+C <- cor(round(as.matrix(bc_n[1:30]), 4))
+corrplot(C, method = "pie")
+```
+
+# Creation training and test datasets for 10-fold crossvalidation 
+```{r}
+# 2021-07-19
+library(caret)
+bc_n_full <- cbind(bc_n, bc$diagnosis)
+
+names(bc_n_full)[31] <- "diagnosis"
+dim(bc_n_full)
+
+set.seed(params$seed_train)
+inTrain <- createDataPartition( y = 1:nrow(bc_n_full),
+                                p = params$ptrain,
+                                list = FALSE )
+# KNN, SVM, RF
+train <- bc_n_full[inTrain, ]
+test <- bc_n_full[-inTrain, ]
+table(train[,31])
+table(test[,31])
+
+```
+
+# KNN
+```{r}
+set.seed(params$seed_alg)
+start_time <- Sys.time()
+ctrl <- trainControl(method="repeatedcv",repeats = 10, number = 10, 
+                     classProbs = T, savePredictions = T) 
+model_knn <- train(diagnosis ~ ., data = train, method = "knn", 
+                   trControl = ctrl, preProcess = c("center","scale"),
+                   tuneLength = 20)
+end_time <- Sys.time()
+(knn_time <- end_time - start_time)
+```
+
+## Confusion matrix KNN
+```{r}
+prediction <- predict(model_knn, test) 
+ct <- table(prediction, test$diagnosis) 
+(cm_knn <- confusionMatrix(ct, positive="Malignant"))
+```
+
+# SVM
+```{r}
+set.seed(params$seed_alg)
+start_time <- Sys.time()
+model_svm <- train(diagnosis ~ ., train, method='svmLinear',
+                   trControl= trainControl(method='cv',number=10,repeats = 10,
+                                           classProbs = T,
+                                           savePredictions = T),
+                   tuneGrid= NULL, trace = FALSE)
+end_time <- Sys.time()
+(svm_time <- end_time - start_time)
+```
+
+## Confusion matrix SVM
+```{r}
+prediction <- predict(model_svm, test) 
+ct <- table(prediction, test$diagnosis) 
+(cm_svm <- confusionMatrix(ct, positive="Malignant"))
+```
+
+# RF
+```{r}
+set.seed(params$seed_alg)
+ctrl <- trainControl( method = "repeatedcv",
+                      number = 10,
+                      repeats = 10,
+                      summaryFunction = defaultSummary,
+                      verboseIter = FALSE,
+                      classProbs = TRUE,
+                      savePredictions = TRUE)
+# repeats=3 )
+## Tunegrid for Random Forest
+# mtry define cuantas variables se seleccionan al azar en cada split. Por
+# defecto sqrt(n.variables)
+grid_rf <- expand.grid(.mtry = c(2,4,8,16))
+start_time <- Sys.time()
+model_rf <- train (diagnosis ~ .,
+                   data = train,
+                   method ="rf",
+                   trControl=ctrl,
+                   tuneGrid = grid_rf,
+                   metric="Accuracy",
+                   prePoc = c("center", "scale"),
+                   verbose =FALSE,
+                   trace = FALSE
+)
+end_time <- Sys.time()
+(rf_time <- end_time - start_time)
+```
+
+## Matriz de Confusión RF
+```{r}
+pred_rf <- predict (model_rf, newdata = test)
+(cm_rf <- confusionMatrix(data=pred_rf, test$diagnosis, positive = "Malignant"))
+```
+
+
+# TABLA 1
+```{r}
+print("KNN")
+cm_knn$overall[1]
+cm_knn$overall[2]
+cm_knn$byClass
+print("SVM")
+cm_svm$overall[1]
+cm_svm$overall[2]
+cm_svm$byClass
+print("RF")
+cm_rf$overall[1]
+cm_rf$overall[2]
+cm_rf$byClass
+```
+
+# CURVAS ROC
+```{r fig.height=4, fig.width=12}
+library(pROC)
+# "royalblue","dodgerblue", "deepskyblue", "lightskyblue"
+par(mfrow=c(1,3))
+plot.roc(model_knn$pred$obs,
+         model_knn$pred$Malignant,
+         smoothed = TRUE,
+         legacy.axes=TRUE,
+         # arguments for ci
+         ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+         # arguments for plot
+         #plot=TRUE, 
+         auc.polygon=TRUE, 
+         max.auc.polygon=TRUE, grid=TRUE,
+         print.auc=TRUE, show.thres=TRUE, 
+         col="royalblue", main = "Curva ROC para kNN")
+plot.roc(model_svm$pred$obs,
+         model_svm$pred$Malignant,
+         smoothed = TRUE,
+         legacy.axes=TRUE,
+         # arguments for ci
+         ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+         # arguments for plot
+         #plot=TRUE, 
+         auc.polygon=TRUE, 
+         max.auc.polygon=TRUE, grid=TRUE,
+         print.auc=TRUE, show.thres=TRUE,
+         col="dodgerblue", main = "Curva ROC para SVM")
+plot.roc(model_rf$pred$obs,
+         model_rf$pred$Malignant,
+         smoothed = TRUE,
+         legacy.axes=TRUE,
+         # arguments for ci
+         ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+         # arguments for plot
+         #plot=TRUE, 
+         auc.polygon=TRUE, 
+         max.auc.polygon=TRUE, grid=TRUE,
+         print.auc=TRUE, show.thres=TRUE,
+         col="deepskyblue", main = "Curva ROC para RF")
+```
+
+```{r}
+# https://stackoverflow.com/questions/46891681/calculating-auc-from-nnet-model 
+# https://www.r-bloggers.com/2016/11/calculating-auc-the-area-under-a-roc-curve/ 
+#plot.roc(test_ann$diagnosis, 
+#         prediction_ann_prob$Malignant, 
+#         smoothed = TRUE,
+#         legacy.axes=TRUE,
+#         ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+#         auc.polygon=TRUE, 
+#         max.auc.polygon=TRUE, grid=TRUE,
+#         print.auc=TRUE, show.thres=TRUE,
+#         col="blue", main = "Curva ROC para RF")
+```
+
+
+```{r}
+print(sessionInfo())
+```
