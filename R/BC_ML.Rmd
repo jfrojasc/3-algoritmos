@@ -121,19 +121,6 @@ test <- bc_n_full[-inTrain, ]
 table(train[,31])
 table(test[,31])
 
-#ANN
-#Data Partition
-set.seed(params$seed_alg)
-inTrain_ann <- createDataPartition(y=bc_n_full$diagnosis, p=round(params$ptrain,4), list=FALSE)
-# Normalized dataset
-ann_data_n <- cbind(bc_n, bc$diagnosis)
-names(ann_data_n)[31] <- "diagnosis"
-train_ann <- ann_data_n[inTrain_ann, ]
-test_ann  <- ann_data_n[-inTrain_ann, ]
-#train.set <- dataset[inTrain,]
-#test.set  <- dataset[-inTrain,]
-( c(nrow(train)/nrow(test), nrow(train_ann)/nrow(test_ann)) )
-# should be around 2
 ```
 
 # KNN
